@@ -360,9 +360,9 @@ def realizar_analisis():
     
     # Escribir README.md
     with open("Documentacion/README.md", "w", encoding="utf-8") as f:
-        f.write("# Análisis de datos Grupo 19\n")
+        f.write("# Análisis de datos Grupo 20\n\n")
         f.write("**Alberto Gabriel Reyes Ning**\n")
-        f.write("**Carné: 201612174**\n")
+        f.write("**Carné: 201612174**\n\n")
         f.write("**Kelly Mischel Herrera Espino**\n")
         f.write("**Carné: 201900716**\n\n")
         f.write("## Análisis exploratorio\n")
@@ -390,14 +390,45 @@ def realizar_analisis():
         f.write(f"- {producto_insight}\n")
         f.write(f"- {genero_comparacion}\n\n")
 
-        f.write("## Conclusiones y recomendaciones\n")
-        f.write("- [ ] (Por llenar)\n\n")
-
+        f.write("## Conclusiones\n")
+        f.write("- [ ] Se observo que en la categoría ropa presnta l amayor parte de las ventas,"
+        "lo cual es un indicador de una fuerte preferencia del mercado por este tipo de productos.\n\n")
+        f.write("-  [ ] En el caso de la región Este se observo una concentración de la mayoría de las ventas, "
+        "lo que sugiere una mayor presencia de clientes.\n")
+        f.write("-  [ ] El producto Sweater se observó que es el más vendido, lo que podría estar "
+        "relacionado con la estación o la popularidad de la prenda.\n")
+        f.write("-  [ ] En el caso del genero masculino, se observo que realiza pedidos con un ticket promedio alto,"
+        " por lo que campañas de marketing personalizadas podrian maximizar los ingresos.\n\n")
+        
+        f.write("## Recomendaciones \n")
+        f.write("-  [ ] Implementar camapañas de promoción con productos de ropa relacionados a"
+        " los sueteres para aumentar el valor del carrito.\n")
+        f.write("-  [ ] Auemntar la inversión en la publicadida o logistica en la region Este para "
+        "capitalizar la demanda existente..\n")
+       
         f.write("## 8. Preguntas\n")
         f.write("- [ ] ¿Cómo podrían los insights obtenidos ayudar a diferenciarse de la competencia?\n")
+        f.write("- [ ] Alberto Gabriel Reyes Ning:\nSe puede disñear estretigas "
+        "enfocadas que la competencias podria obtener, esto con la ayuda de los "
+        "insights debido a que estan basado en datos reales del comportamiento del cliente, esto permite tomar decisiones.\n")
+        f.write("- [ ] Kelly Mischel Herrera Espino:\nLos insights permite un refuerzo"
+        " en la personalización, es decir que se pueden lanzar campañas especificas,"
+        " aumentando la fidelización de los clientes tomando en cuenta que segmento"
+        " o grupo gasta más en ciertos productos.\n\n")
         f.write("- [ ] ¿Qué decisiones estratégicas podrían tomarse basándose en este análisis?\n")
+        f.write("- [ ] Alberto Gabriel Reyes Ning:\nUn refuerzo en el tema del inventario en productos más "
+        "vendidos como sueteres y realizar un aumento en el marketing en la región.\n")
+        f.write("- [ ] Kelly Mischel Herrera Espino:\nAplicar promociones en las categoría de ropa, adaptando el "
+        "contenido de marketing por genero y asi tener un enfoque personalizado para estos grupos.\n\n")
         f.write("- [ ] ¿Cómo podría este análisis de datos ayudar a la empresa a ahorrar costos o mejorar la eficiencia?\n")
+        f.write("- [ ] Alberto Gabriel Reyes Ning:\nAl obtener las regiones que registran menos ventas se puede realizar un ajuste"
+        " en las rutas de envío y reduicr costos de logisticas innecesarios.\n")
+        f.write("- [ ] Kelly Mischel Herrera Espino:\nSe puede evitar un sobrestock en productos que tienen una baja rotación, optimizando asi "
+        "los recursos de bodega.\n\n")
         f.write("- [ ] ¿Qué datos adicionales recomendarían recopilar para obtener insights aún más valiosos?\n")
+        f.write("- [ ] Alberto Gabriel Reyes Ning:\nUn historial de navegación para idientificar intereses no convertidos.\n")
+        f.write("- [ ] Kelly Mischel Herrera Espino:\nDatos sobre devoluciones y tambien reseñas de productos, esto para poder"
+        " entender la satisfacción del cliente.\n")
 
     print("Análisis completado. Resultados en Documentacion/")
 
