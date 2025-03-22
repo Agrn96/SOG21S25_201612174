@@ -1,74 +1,42 @@
-USE VuelosDB;
-GO
-
--- Drop existing tables if they exist
-DROP TABLE IF EXISTS Flights_Fact;
-GO
-DROP TABLE IF EXISTS Passengers_Dim;
-GO
-DROP TABLE IF EXISTS Airports_Dim;
-GO
-DROP TABLE IF EXISTS Pilots_Dim;
-GO
-DROP TABLE IF EXISTS Dates_Dim;
-GO
-DROP TABLE IF EXISTS FlightStatus_Dim;
-GO
-
--- Dimension Table: Passengers
-CREATE TABLE Passengers_Dim (
-    PassengerID INT PRIMARY KEY IDENTITY(1,1),
-    OriginalPassengerID VARCHAR(50) COLLATE Latin1_General_BIN2 UNIQUE,
-    FirstName VARCHAR(100),
-    LastName VARCHAR(100),
-    Gender VARCHAR(10),
-    Age INT,
-    Nationality VARCHAR(50)
+CREATE TABLE dim_fecha (
+    fecha_id SERIAL PRIMARY KEY,
+    fecha DATE NOT NULL,
+    dia INT,
+    mes INT,
+    anio INT,
+    dia_semana VARCHAR(10)
 );
-GO
 
--- Dimension Table: Airports
-CREATE TABLE Airports_Dim (
-    AirportID INT PRIMARY KEY IDENTITY(1,1),
-    AirportCode VARCHAR(3) UNIQUE NOT NULL,
-    AirportName VARCHAR(100) NOT NULL,
-    CountryCode VARCHAR(10),
-    CountryName VARCHAR(50),
-    Continent VARCHAR(50)
+CREATE TABLE dim_cliente (
+    cliente_id INT PRIMARY KEY,
+    genero VARCHAR(20),
+    edad INT
 );
-GO
 
--- Dimension Table: Dates (Departure Dates)
-CREATE TABLE Dates_Dim (
-    DateKey INT PRIMARY KEY IDENTITY(1,1),
-    FullDate DATE UNIQUE NOT NULL,
-    Year INT,
-    Month INT,
-    Day INT
+CREATE TABLE dim_producto (
+    producto_id SERIAL PRIMARY KEY,
+    nombre_producto VARCHAR(100),
+    categoria VARCHAR(50),
+    precio_unitario NUMERIC(10, 2)
 );
-GO
 
--- Dimension Table: Flight Status
-CREATE TABLE FlightStatus_Dim (
-    FlightStatusID INT PRIMARY KEY IDENTITY(1,1),
-    FlightStatus VARCHAR(20) UNIQUE NOT NULL
+CREATE TABLE dim_metodo_pago (
+    metodo_pago_id SERIAL PRIMARY KEY,
+    metodo_pago VARCHAR(50)
 );
-GO
 
--- Dimension Table: Pilots
-CREATE TABLE Pilots_Dim (
-    PilotID INT PRIMARY KEY IDENTITY(1,1),
-    PilotName VARCHAR(100) UNIQUE NOT NULL
+CREATE TABLE dim_region_envio (
+    region_envio_id SERIAL PRIMARY KEY,
+    region VARCHAR(50)
 );
-GO
 
--- Fact Table: Flights
-CREATE TABLE Flights_Fact (
-    FlightID INT PRIMARY KEY IDENTITY(1,1),
-    PassengerID INT FOREIGN KEY REFERENCES Passengers_Dim(PassengerID),
-    DateKey INT FOREIGN KEY REFERENCES Dates_Dim(DateKey),
-    AirportID INT FOREIGN KEY REFERENCES Airports_Dim(AirportID),
-    PilotID INT FOREIGN KEY REFERENCES Pilots_Dim(PilotID),
-    FlightStatusID INT FOREIGN KEY REFERENCES FlightStatus_Dim(FlightStatusID)
+CREATE TABLE facts_ventas (
+    order_id INT PRIMARY KEY,
+    fecha_id INT REFERENCES dim_fecha(fecha_id),
+    cliente_id INT REFERENCES dim_cliente(cliente_id),
+    producto_id INT REFERENCES dim_producto(producto_id),
+    metodo_pago_id INT REFERENCES dim_metodo_pago(metodo_pago_id),
+    region_envio_id INT REFERENCES dim_region_envio(region_envio_id),
+    cantidad INT,
+    total_orden NUMERIC(10, 2)
 );
-GO

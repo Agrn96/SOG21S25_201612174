@@ -1,0 +1,34 @@
+Tabla de facts: 
+- facts_ventas
+    - order_id
+    - fecha_id
+    - cliente_id
+    - producto_id
+    - cantidad
+    - total_orden
+    - metodo_pago_id
+    - region_envio_id
+
+Dimensiones
+- dim_fecha
+    - fecha_id (clave primaria)
+    - fecha
+    - dia
+    - mes
+    - año
+    - dia_semana
+- dim_cliente
+    - cliente_id (clave primaria)
+    - genero
+    - edad
+- dim_producto
+    - producto_id (clave primaria)
+    - nombre_producto
+    - categoria
+    - precio_unitario
+- dim_metodo_pago
+    - metodo_pago_id (clave primaria)
+    - metodo_pago
+- dim_region_envio
+    - region_envio_id (clave primaria)
+    - region

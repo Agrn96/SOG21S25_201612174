@@ -1,351 +1,445 @@
-import pyodbc
+
 import pandas as pd
+from sqlalchemy import create_engine, text
+from datetime import datetime
 import os
 from dotenv import load_dotenv
+import psycopg2
 
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "sql-script", "data")
+DB_USER = os.getenv('DB_USER')
+DB_PASS = os.getenv('DB_PASS')
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT')
+DB_NAME = os.getenv('DB_NAME')
 
-os.makedirs(DATA_DIR, exist_ok=True)
-
-def connect_db(DATA_BASE):
-    """ Establish a connection to SQL Server """
-    try:
-        conn = pyodbc.connect(
-            f"DRIVER={os.getenv('DB_DRIVER')};"
-            f"SERVER={os.getenv('DB_SERVER')};"
-            f"DATABASE={DATA_BASE};"
-            f"UID={os.getenv('DB_USER')};"
-            f"PWD={os.getenv('DB_PASSWORD')}"
-        )
-        return conn
-    except Exception as e:
-        print(f"[ERROR] Database connection failed: {e}")
-        return None
-
-def execute_sql_script(file_path, DATA_BASE):
-    """ Execute SQL script from a file """
-    conn = connect_db(DATA_BASE)
-    conn.autocommit = True
-    cursor = conn.cursor()
-
-    with open(file_path, "r") as file:
-        sql_script = file.read()
-
-    statements = sql_script.split("GO")  
-
-    for statement in statements:
-        if statement.strip():
-            try:
-                cursor.execute(statement)
-            except pyodbc.Error as e:
-                print(f"[ERROR] Failed executing statement: {statement.strip()}\n{e}")
-
-    conn.commit()
-    conn.close()
-    print(f"[INFO] Executed SQL script: {file_path}")
-    
-QUERIES = {
-    "1": ("Total Records in Each Table", 
-          "SELECT 'Passengers_Dim' AS TableName, COUNT(*) AS RecordCount FROM Passengers_Dim "
-          "UNION ALL SELECT 'Flights_Fact', COUNT(*) FROM Flights_Fact "
-          "UNION ALL SELECT 'Airports_Dim', COUNT(*) FROM Airports_Dim "
-          "UNION ALL SELECT 'Pilots_Dim', COUNT(*) FROM Pilots_Dim "
-          "UNION ALL SELECT 'Dates_Dim', COUNT(*) FROM Dates_Dim "
-          "UNION ALL SELECT 'FlightStatus_Dim', COUNT(*) FROM FlightStatus_Dim;"),
-
-    "2": ("Percentage of Passengers by Gender", 
-          "SELECT Gender, COUNT(*) * 100.0 / (SELECT COUNT(*) FROM Passengers_Dim) AS Percentage "
-          "FROM Passengers_Dim GROUP BY Gender;"),
-
-    "3": ("Nationalities with Highest Departures by Month", 
-          "WITH MonthlyCounts AS ("
-          "    SELECT p.Nationality, FORMAT(d.FullDate, 'MM-yyyy') AS MonthYear, COUNT(*) AS TotalFlights "
-          "    FROM Passengers_Dim p "
-          "    JOIN Flights_Fact f ON p.PassengerID = f.PassengerID "
-          "    JOIN Dates_Dim d ON f.DateKey = d.DateKey "
-          "    GROUP BY p.Nationality, FORMAT(d.FullDate, 'MM-yyyy') "
-          ") "
-          "SELECT * FROM MonthlyCounts "
-          "PIVOT ("
-          "    SUM(TotalFlights) FOR MonthYear IN ([01-2022], [02-2022], [03-2022], [04-2022], [05-2022], "
-          "                                          [06-2022], [07-2022], [08-2022], [09-2022], [10-2022], "
-          "                                          [11-2022], [12-2022])"
-          ") AS PivotTable "
-          "ORDER BY Nationality;"),
-
-    "4": ("Number of Flights per Country", 
-          "SELECT a.CountryName, COUNT(*) AS TotalFlights "
-          "FROM Airports_Dim a JOIN Flights_Fact f ON a.AirportID = f.AirportID "
-          "GROUP BY a.CountryName ORDER BY TotalFlights DESC;"),
-
-    "5": ("Top 5 Airports with Most Passengers", 
-          "SELECT TOP 5 a.AirportName, COUNT(*) AS TotalPassengers "
-          "FROM Flights_Fact f JOIN Airports_Dim a ON f.AirportID = a.AirportID "
-          "GROUP BY a.AirportName ORDER BY TotalPassengers DESC;"),
-
-    "6": ("Count of Flights by Flight Status", 
-          "SELECT fs.FlightStatus, COUNT(*) AS TotalFlights "
-          "FROM Flights_Fact f JOIN FlightStatus_Dim fs ON f.FlightStatusID = fs.FlightStatusID "
-          "GROUP BY fs.FlightStatus;"),
-
-    "7": ("Top 5 Most Visited Countries", 
-          "SELECT TOP 5 a.CountryName, COUNT(*) AS TotalVisits "
-          "FROM Airports_Dim a JOIN Flights_Fact f ON a.AirportID = f.AirportID "
-          "GROUP BY a.CountryName ORDER BY TotalVisits DESC;"),
-
-    "8": ("Top 5 Most Visited Continents", 
-          "SELECT TOP 5 a.Continent, COUNT(*) AS TotalVisits "
-          "FROM Airports_Dim a JOIN Flights_Fact f ON a.AirportID = f.AirportID "
-          "GROUP BY a.Continent ORDER BY TotalVisits DESC;"),
-
-    "9": ("Top 5 Most Traveling Age Groups by Gender", 
-          "SELECT TOP 5 p.Age, p.Gender, COUNT(*) AS TotalPassengers "
-          "FROM Passengers_Dim p "
-          "GROUP BY p.Age, p.Gender "
-          "ORDER BY TotalPassengers DESC;"),
-
-    "10": ("Count of Flights per MM-YYYY", 
-           "SELECT d.Year, d.Month, COUNT(*) AS TotalFlights "
-           "FROM Flights_Fact f JOIN Dates_Dim d ON f.DateKey = d.DateKey "
-           "GROUP BY d.Year, d.Month ORDER BY d.Year, d.Month;"),
-}
-
-def run_query(choice):
-    conn = connect_db("VuelosDB")
-    cursor = conn.cursor()
-    
-    query_title, query_sql = QUERIES[choice]
-    
-    print(f"\n[INFO] Running Query: {query_title}\n")
-    cursor.execute(query_sql)
-    
-    rows = cursor.fetchall()
-    for row in rows:
-        print(row)
-    
-    conn.close()
-
-def run_queries():
-    while True:
-        print("\n===== Analytical Queries Menu =====")
-        for key, value in QUERIES.items():
-            print(f"{key}. {value[0]}")
-        print("11. Go Back to Main Menu")
-        
-        choice = input("Select a query to run: ")
-
-        if choice in QUERIES:
-            run_query(choice)
-        elif choice == "11":
-            break
-        else:
-            print("[ERROR] Invalid option. Try again.")
-
-def disable_foreign_keys(cursor):
-    """ Disable foreign key checks before bulk insert """
-    cursor.execute("ALTER TABLE dbo.Flights_Fact NOCHECK CONSTRAINT ALL;")
-    print("[INFO] Foreign key constraints disabled.")
-
-def enable_foreign_keys(cursor):
-    """ Re-enable foreign key checks after bulk insert """
-    cursor.execute("ALTER TABLE dbo.Flights_Fact CHECK CONSTRAINT ALL;")
-    print("[INFO] Foreign key constraints re-enabled.")
-    
-def transform_and_save_csvs():
-    file_path = input("Enter the CSV file path: ")
-
-    if not os.path.exists(file_path):
-        print("[ERROR] File not found.")
-        return
-
-    try:
-        df = pd.read_csv(file_path)
-
-        def parse_dates(date_str):
-            for fmt in ('%m/%d/%Y', '%m-%d-%Y'):
-                try:
-                    return pd.to_datetime(date_str, format=fmt)
-                except ValueError:
-                    continue
-            return pd.NaT 
-
-        df["Departure Date"] = df["Departure Date"].apply(parse_dates)
-
-        if df["Departure Date"].isna().sum() > 0:
-            print("[WARNING] Some dates could not be parsed. Check the dataset.")
-
-        df["Departure Date"] = df["Departure Date"].dt.strftime("%Y-%m-%d")
-
-
-        # Departure Date Dimension
-        dim_departure_date = df[['Departure Date']].drop_duplicates().copy()
-        dim_departure_date['DepartureDateID'] = range(1, len(dim_departure_date) + 1)
-        dim_departure_date['Year']  = pd.to_datetime(dim_departure_date['Departure Date']).dt.year
-        dim_departure_date['Month'] = pd.to_datetime(dim_departure_date['Departure Date']).dt.month
-        dim_departure_date['Day']   = pd.to_datetime(dim_departure_date['Departure Date']).dt.day
-        print("[INFO] Departure Date Dimension created.")
-
-        # Airport Dimension 
-        dim_airport = df[['Arrival Airport','Airport Name', 'Airport Country Code', 'Country Name', 'Airport Continent']].drop_duplicates().copy()
-        dim_airport['AirportID'] = range(1, len(dim_airport) + 1)
-        dim_airport = dim_airport.drop_duplicates(subset=['Arrival Airport'])
-        print("[INFO] Airport Dimension created.")
-
-        # Pilot Dimension
-        dim_pilot = df[['Pilot Name']].drop_duplicates().copy()
-        dim_pilot['PilotID'] = range(1, len(dim_pilot) + 1)
-        print("[INFO] Pilot Dimension created.")
-
-        # Flight Status Dimension
-        dim_flight_status = df[['Flight Status']].drop_duplicates().copy()
-        dim_flight_status['FlightStatusID'] = range(1, len(dim_flight_status) + 1)
-        print("[INFO] Flight Status Dimension created.")
-
-
-        # Passenger Dimension
-        dim_passenger = df[['Passenger ID', 'First Name', 'Last Name', 'Gender', 'Age', 'Nationality']].drop_duplicates().copy()
-        dim_passenger = dim_passenger.drop_duplicates(subset=['Passenger ID'])
-        dim_passenger['PassengerID'] = range(1, len(dim_passenger) + 1)
-        print("[INFO] Passenger Dimension created.")
-        
-        # --- Create Fact Table ---
-        df['PassengerID'] = df['Passenger ID'].map(dim_passenger.set_index('Passenger ID')['PassengerID'])
-        df['DepartureDateID'] = df['Departure Date'].map(dim_departure_date.set_index('Departure Date')['DepartureDateID'])
-        df['AirportID'] = df['Arrival Airport'].map(dim_airport.set_index('Arrival Airport')['AirportID'])
-        df['PilotID'] = df['Pilot Name'].map(dim_pilot.set_index('Pilot Name')['PilotID'])
-        df['FlightStatusID'] = df['Flight Status'].map(dim_flight_status.set_index('Flight Status')['FlightStatusID'])
-        print("[INFO] Fact Table created.")
-
-        # Fact Table
-        fact_flight = df[['PassengerID', 'DepartureDateID', 'AirportID', 'PilotID', 'FlightStatusID']].copy()
-        
-        print("[INFO] Data transformed successfully.")
-        conn = connect_db("VuelosDB")
-        print("[INFO] Connected to SQL Server.")
-        if conn:
-            cursor = conn.cursor()
-            disable_foreign_keys(cursor)
-
-            print("[INFO] Inserting data into SQL Server...")
-
-            try:
-                cursor.execute("USE VuelosDB;")
-                conn.commit()
-                print("[INFO] Using VuelosDB database")
-                cursor.fast_executemany = True
-                cursor.executemany("INSERT INTO dbo.Passengers_Dim (OriginalPassengerID, FirstName, LastName, Gender, Age, Nationality) VALUES (?, ?, ?, ?, ?, ?)", 
-                                dim_passenger[['Passenger ID', 'First Name', 'Last Name', 'Gender', 'Age', 'Nationality']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into Passengers_Dim")
-
-                cursor.executemany("INSERT INTO dbo.Airports_Dim (AirportCode, AirportName, CountryCode, CountryName, Continent) VALUES (?, ?, ?, ?, ?)", 
-                                dim_airport[['Arrival Airport', 'Airport Name', 'Airport Country Code', 'Country Name', 'Airport Continent']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into Airports_Dim")
-
-                cursor.executemany("INSERT INTO dbo.Dates_Dim (FullDate, Year, Month, Day) VALUES (?, ?, ?, ?)", 
-                                dim_departure_date[['Departure Date', 'Year', 'Month', 'Day']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into Dates_Dim")
-
-                cursor.executemany("INSERT INTO dbo.Pilots_Dim (PilotName) VALUES (?)", 
-                                dim_pilot[['Pilot Name']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into Pilots_Dim")
-
-                cursor.executemany("INSERT INTO dbo.FlightStatus_Dim (FlightStatus) VALUES (?)", 
-                                dim_flight_status[['Flight Status']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into FlightStatus_Dim")
-
-                cursor.executemany("INSERT INTO dbo.Flights_Fact (PassengerID, DateKey, AirportID, PilotID, FlightStatusID) VALUES (?, ?, ?, ?, ?)", 
-                                fact_flight[['PassengerID', 'DepartureDateID', 'AirportID', 'PilotID', 'FlightStatusID']].values.tolist())
-                conn.commit()
-                print("[INFO] Data inserted into Flights_Fact")
-            
-                # Re-enable foreign key checks after bulk insert
-                enable_foreign_keys(cursor)
-
-            except Exception as e:
-                print(f"[ERROR] Failed inserting data: {e}")
-                conn.rollback()
-
-            conn.close()
-            print("[INFO] Data successfully inserted into SQL Server.")
-
-        dim_passenger.to_csv(os.path.join(DATA_DIR, "dim_passenger.csv"), index=False)
-        dim_departure_date.to_csv(os.path.join(DATA_DIR, "dim_departure_date.csv"), index=False)
-        dim_airport.to_csv(os.path.join(DATA_DIR, "dim_airport.csv"), index=False)
-        dim_pilot.to_csv(os.path.join(DATA_DIR, "dim_pilot.csv"), index=False)
-        dim_flight_status.to_csv(os.path.join(DATA_DIR, "dim_flight_status.csv"), index=False)
-        fact_flight.to_csv(os.path.join(DATA_DIR, "fact_flight.csv"), index=False)
-
-        print(f"[INFO] Transformed data saved to {DATA_DIR}")
-        
-        print("DimPassenger:")
-        print(dim_passenger.head())
-        print("Total registros:", len(dim_passenger))
-        input("Presione Enter para continuar...")
-
-        print("DimDepartureDate:")
-        print(dim_departure_date.head())
-        print("Total registros:", len(dim_departure_date))
-        input("Presione Enter para continuar...")
-
-        print("DimAirport:")
-        print(dim_airport.head())
-        print("Total registros:", len(dim_airport))
-        input("Presione Enter para continuar...")
-
-        print("DimPilot:")
-        print(dim_pilot.head())
-        print("Total registros:", len(dim_pilot))
-        input("Presione Enter para continuar...")
-
-        print("DimFlightStatus:")
-        print(dim_flight_status.head())
-        print("Total registros:", len(dim_flight_status))
-        input("Presione Enter para continuar...")
-
-        print("FactFlight:")
-        print(fact_flight.head())
-        print("Total registros:", len(fact_flight))
-        input("Presione Enter para continuar...")
-
-    except Exception as e:
-        print(f"[ERROR] Failed to process CSV: {e}")
-
-    # execute_sql_script("sql-script/load_data.sql", "VuelosDB")
+CREATE_DB_SQL_PATH = 'sql-script/create_db.sql'
+CREATE_SCHEMA_SQL_PATH = 'sql-script/create_schema.sql'
+DELETE_SCHEMA_SQL_PATH = 'sql-script/delete_schema.sql'
 
 def main():
-    execute_sql_script("sql-script/create_db.sql", "master")
-    
     while True:
-        print("\n===== ETL Console Application =====")
-        print("1. Delete Existing Model") 
-        print("2. Create BI Model in SQL Server")
-        print("3. Extract & Preview Data from CSV")
-        print("4. Run Analytical Queries")
-        print("5. Exit")
+        print("""
+Seleccione una opción:
+1. Crear DB
+2. Crear Esquema
+3. Cargar Datos
+4. Realizar Análisis
+5. Limpiar Datos (DROP Tables)
+6. Salir
+        """)
+        choice = input("Opción: ").strip()
 
-        choice = input("Select an option: ")
-
-        if choice == "1":
-            execute_sql_script("sql-script/delete_schema.sql", "VuelosDB")
-        elif choice == "2":
-            execute_sql_script("sql-script/create_schema.sql", "VuelosDB")
-        elif choice == "3":
-            transform_and_save_csvs()
-        elif choice == "4":
-            run_queries()
-        elif choice == "5":
-            print("Exiting application...")
+        if choice == '1':
+            crear_db()
+        elif choice == '2':
+            crear_esquema()
+        elif choice == '3':
+            cargar_datos()
+        elif choice == '4':
+            realizar_analisis()
+        elif choice == '5':
+            limpiar_datos()
+        elif choice == '6':
+            print("Saliendo...")
             break
         else:
-            print("[ERROR] Invalid option. Try again.")
+            print("Opción no válida. Intenta de nuevo.")
 
-if __name__ == "__main__":
+def crear_db():
+    # Connect to the default database to check and create the new one
+    default_engine = create_engine(
+        f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/postgres',
+        isolation_level='AUTOCOMMIT'
+    )
+    with default_engine.connect() as conn:
+        result = conn.execute(text(
+            f"SELECT 1 FROM pg_database WHERE datname = '{DB_NAME}'"
+        )).fetchone()
+        if result:
+            print(f"⚠️ La base de datos '{DB_NAME}' ya existe. Saltando creación.")
+        else:
+            with open(CREATE_DB_SQL_PATH, 'r') as file:
+                conn.execute(text(file.read()))
+            print("✅ Base de datos creada.")
+
+    crear_esquema()
+
+def crear_esquema():
+    print(f"Creando esquema directamente desde Python en la base de datos: {DB_NAME}")
+
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+
+        cur.execute("SET search_path TO public;")
+        print("search_path establecido a 'public'")
+
+        tables_sql = [
+            """
+            CREATE TABLE IF NOT EXISTS public.dim_fecha (
+                fecha_id SERIAL PRIMARY KEY,
+                fecha DATE NOT NULL,
+                dia INT,
+                mes INT,
+                anio INT,
+                dia_semana VARCHAR(10)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS public.dim_cliente (
+                cliente_id INT PRIMARY KEY,
+                genero VARCHAR(20),
+                edad INT
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS public.dim_producto (
+                producto_id SERIAL PRIMARY KEY,
+                nombre_producto VARCHAR(100),
+                categoria VARCHAR(50),
+                precio_unitario NUMERIC(10, 2)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS public.dim_metodo_pago (
+                metodo_pago_id SERIAL PRIMARY KEY,
+                metodo_pago VARCHAR(50)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS public.dim_region_envio (
+                region_envio_id SERIAL PRIMARY KEY,
+                region VARCHAR(50)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS public.facts_ventas (
+                order_id INT PRIMARY KEY,
+                fecha_id INT REFERENCES dim_fecha(fecha_id),
+                cliente_id INT REFERENCES dim_cliente(cliente_id),
+                producto_id INT REFERENCES dim_producto(producto_id),
+                metodo_pago_id INT REFERENCES dim_metodo_pago(metodo_pago_id),
+                region_envio_id INT REFERENCES dim_region_envio(region_envio_id),
+                cantidad INT,
+                total_orden NUMERIC(10, 2)
+            )
+            """
+        ]
+
+        for statement in tables_sql:
+            first_line = statement.strip().splitlines()[0]
+            print(f"Ejecutando: {first_line}...")
+            try:
+                cur.execute(statement)
+            except Exception as e:
+                print(f"Error al ejecutar la sentencia: {e}")
+
+        print("Esquema creado usando psycopg2.")
+        cur.close()
+        conn.close()
+
+    except Exception as e:
+        print(f"Error al conectar con la base de datos: {e}")
+
+    verificar_tablas()
+            
+def verificar_tablas():
+    print(f"Verificando existencia de tablas en la base de datos: {DB_NAME}")
+    db_engine = create_engine(f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    
+    expected_tables = [
+        'dim_fecha', 'dim_cliente', 'dim_producto',
+        'dim_metodo_pago', 'dim_region_envio', 'facts_ventas'
+    ]
+    
+    with db_engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+        """)).fetchall()
+        
+        existing_tables = set(row[0] for row in result)
+        print("Tablas encontradas en 'public':")
+        for tbl in sorted(existing_tables):
+            print(f"  - {tbl}")
+
+        missing = [t for t in expected_tables if t not in existing_tables]
+        if missing:
+            print("Faltan las siguientes tablas:", ', '.join(missing))
+        else:
+            print("Todas las tablas esperadas están presentes.")
+
+def cargar_datos():
+    engine = create_engine(f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+    df = pd.read_csv('data/ventas_tienda_online.csv')
+    df = df.drop_duplicates().fillna(0)
+    df['purchase_date'] = pd.to_datetime(df['purchase_date'], dayfirst=True, errors='coerce')
+
+    # DIM FECHA
+    dim_fecha = df[['purchase_date']].drop_duplicates().copy()
+    dim_fecha['dia'] = dim_fecha['purchase_date'].dt.day
+    dim_fecha['mes'] = dim_fecha['purchase_date'].dt.month
+    dim_fecha['anio'] = dim_fecha['purchase_date'].dt.year
+    dim_fecha['dia_semana'] = dim_fecha['purchase_date'].dt.day_name()
+    dim_fecha = dim_fecha.rename(columns={'purchase_date': 'fecha'})
+    dim_fecha['fecha_id'] = range(1, len(dim_fecha)+1)
+    dim_fecha = dim_fecha.drop_duplicates(subset='fecha')
+
+    # DIM CLIENTE
+    dim_cliente = df[['customer_id', 'customer_gender', 'customer_age']].drop_duplicates()
+    dim_cliente = dim_cliente.rename(columns={
+        'customer_id': 'cliente_id',
+        'customer_gender': 'genero',
+        'customer_age': 'edad'
+    })
+    dim_cliente = dim_cliente.drop_duplicates(subset='cliente_id')
+
+    # DIM PRODUCTO
+    dim_producto = df[['product_name', 'product_category', 'product_price']].drop_duplicates()
+    dim_producto['producto_id'] = range(1, len(dim_producto)+1)
+    dim_producto = dim_producto.drop_duplicates(subset=['product_name', 'product_category', 'product_price'])
+
+    # DIM MÉTODO DE PAGO
+    dim_metodo_pago = df[['payment_method']].drop_duplicates()
+    dim_metodo_pago['metodo_pago_id'] = range(1, len(dim_metodo_pago)+1)
+    dim_metodo_pago = dim_metodo_pago.drop_duplicates(subset='payment_method')
+
+    # DIM REGIÓN
+    dim_region_envio = df[['shipping_region']].drop_duplicates()
+    dim_region_envio['region_envio_id'] = range(1, len(dim_region_envio)+1)
+    dim_region_envio = dim_region_envio.drop_duplicates(subset='shipping_region')
+
+    # MERGE para hechos
+    df = df.merge(dim_fecha.rename(columns={'fecha': 'purchase_date'}), on='purchase_date')
+    df = df.merge(dim_producto, on=['product_name', 'product_category', 'product_price'])
+    df = df.merge(dim_metodo_pago, on='payment_method')
+    df = df.merge(dim_region_envio, on='shipping_region')
+
+    facts_ventas = df[['order_id', 'fecha_id', 'customer_id', 'producto_id', 'metodo_pago_id',
+                       'region_envio_id', 'quantity', 'order_total']]
+    facts_ventas = facts_ventas.rename(columns={
+        'customer_id': 'cliente_id',
+        'quantity': 'cantidad',
+        'order_total': 'total_orden'
+    })
+
+    # Carga a PostgreSQL
+    dim_fecha[['fecha_id', 'fecha', 'dia', 'mes', 'anio', 'dia_semana']].to_sql('dim_fecha', engine, if_exists='append', index=False)
+    dim_cliente.to_sql('dim_cliente', engine, if_exists='append', index=False)
+    dim_producto[['producto_id', 'product_name', 'product_category', 'product_price']].rename(
+        columns={
+            'product_name': 'nombre_producto',
+            'product_category': 'categoria',
+            'product_price': 'precio_unitario'
+        }).to_sql('dim_producto', engine, if_exists='append', index=False)
+    dim_metodo_pago.rename(columns={'payment_method': 'metodo_pago'}).to_sql('dim_metodo_pago', engine, if_exists='append', index=False)
+    dim_region_envio.rename(columns={'shipping_region': 'region'}).to_sql('dim_region_envio', engine, if_exists='append', index=False)
+    facts_ventas.to_sql('facts_ventas', engine, if_exists='append', index=False)
+
+    print("Datos cargados exitosamente.")
+
+def realizar_analisis():
+    print("Ejecutando análisis...")
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    engine = create_engine(f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}')
+
+    os.makedirs("Documentacion/images", exist_ok=True)
+
+    query = '''
+        SELECT fv.order_id, fv.cantidad, fv.total_orden, dc.genero, dc.edad,
+               dp.nombre_producto, dp.categoria, dp.precio_unitario,
+               df.fecha, df.mes, df.anio,
+               dmp.metodo_pago, dre.region
+        FROM facts_ventas fv
+        JOIN dim_cliente dc ON fv.cliente_id = dc.cliente_id
+        JOIN dim_producto dp ON fv.producto_id = dp.producto_id
+        JOIN dim_fecha df ON fv.fecha_id = df.fecha_id
+        JOIN dim_metodo_pago dmp ON fv.metodo_pago_id = dmp.metodo_pago_id
+        JOIN dim_region_envio dre ON fv.region_envio_id = dre.region_envio_id
+    '''
+    df = pd.read_sql(query, engine)
+
+    # Estadísticas básicas
+    stats_base = df[['edad', 'precio_unitario', 'cantidad', 'total_orden']].agg(['mean', 'median'])
+    stats_mode = df[['edad', 'precio_unitario', 'cantidad', 'total_orden']].mode().iloc[0]
+    stats_mode.name = 'mode'
+    stats = pd.concat([stats_base, stats_mode.to_frame().T])
+    stats_md = stats.to_markdown()
+
+    # Ventas por categoría
+    categoria_plot = df.groupby("categoria")["total_orden"].sum().plot(kind='bar', title="Ventas por Categoría")
+    plt.ylabel("Total en Q")
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/ventas_categoria.png")
+    plt.clf()
+    
+    categoria_total = df.groupby("categoria")["total_orden"].sum()
+    categoria_top = categoria_total.idxmax()
+    categoria_valor = categoria_total.max()
+    categoria_insight = f"La categoría con mayores ventas fue **{categoria_top}** con Q{categoria_valor:.2f}."
+
+    # Ventas por región
+    region_plot = df.groupby("region")["total_orden"].sum().plot(kind='bar', title="Ventas por Región")
+    plt.ylabel("Total en Q")
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/ventas_region.png")
+    plt.clf()
+    
+    region_total = df.groupby("region")["total_orden"].sum()
+    region_top = region_total.idxmax()
+    region_valor = region_total.max()
+    region_insight = f"La región con mayores ventas fue **{region_top}** con Q{region_valor:.2f}."
+
+    # Tendencias por mes
+    df['fecha'] = pd.to_datetime(df['fecha'])
+    mensual = df.groupby(df['fecha'].dt.to_period("M"))['total_orden'].sum()
+    mensual.plot(kind='line', marker='o', title="Ventas por Mes")
+    plt.ylabel("Total en Q")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/ventas_mensuales.png")
+    plt.clf()
+    
+    ventas_mensual = df.groupby(df['fecha'].dt.to_period("M"))['total_orden'].sum()
+    mes_top = ventas_mensual.idxmax().strftime('%B %Y')
+    mes_low = ventas_mensual.idxmin().strftime('%B %Y')
+    mes_insight = f"El mes con mayores ventas fue **{mes_top}** y el mes con menores ventas fue **{mes_low}**."
+
+    # Productos más vendidos
+    df.groupby("nombre_producto")["cantidad"].sum().sort_values(ascending=False).head(10).plot(kind='bar', title="Top 10 Productos más Vendidos")
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/top_productos.png")
+    plt.clf()
+    
+    top_producto = df.groupby("nombre_producto")["cantidad"].sum().sort_values(ascending=False).head(1)
+    producto_nombre = top_producto.index[0]
+    producto_cantidad = top_producto.iloc[0]
+    producto_insight = f"El producto más vendido fue **{producto_nombre}** con un total de {producto_cantidad} unidades."
+
+    # Dispersión edad vs total orden
+    df.plot.scatter(x='edad', y='total_orden', alpha=0.5, title="Relación entre Edad y Total de Orden")
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/edad_vs_total.png")
+    plt.clf()
+
+    # Boxplot total orden por género
+    df.boxplot(column='total_orden', by='genero')
+    plt.title("Distribución de Total de Orden por Género")
+    plt.suptitle('')
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/orden_por_genero.png")
+    plt.clf()
+    
+    genero_total = df.groupby("genero")["total_orden"].mean()
+    genero_comparacion = f"En promedio, **{genero_total.idxmax()}** gastó más por orden con Q{genero_total.max():.2f}."
+
+
+    # Correlaciones
+    corr = df[['edad', 'precio_unitario', 'cantidad', 'total_orden']].corr()
+    fig, ax = plt.subplots()
+    cax = ax.matshow(corr, cmap='coolwarm')
+    fig.colorbar(cax)
+    plt.xticks(range(len(corr.columns)), corr.columns, rotation=45)
+    plt.yticks(range(len(corr.columns)), corr.columns)
+    plt.title("Mapa de Calor de Correlaciones", pad=20)
+    plt.tight_layout()
+    plt.savefig("Documentacion/images/heatmap_correlaciones.png")
+    plt.clf()
+    
+    # Escribir README.md
+    with open("Documentacion/README.md", "w", encoding="utf-8") as f:
+        f.write("# Análisis de datos Grupo 19\n")
+        f.write("**Alberto Gabriel Reyes Ning**\n")
+        f.write("**Carné: 201612174**\n")
+        f.write("**Kelly Mischel Herrera Espino**\n")
+        f.write("**Carné: 201900716**\n\n")
+        f.write("## Análisis exploratorio\n")
+        f.write("### a. Estadísticas básicas\n")
+        f.write(stats_md + "\n\n")
+        f.write("### b. Visualizaciones\n")
+        f.write("![Ventas por categoría](images/ventas_categoria.png)\n\n")
+        f.write("![Ventas por región](images/ventas_region.png)\n\n")
+
+        f.write("## Análisis de tendencias\n")
+        f.write("![Ventas por mes](images/ventas_mensuales.png)\n\n")
+        f.write("![Top productos](images/top_productos.png)\n\n")
+
+        f.write("## Segmentación de clientes\n")
+        f.write("![Boxplot por género](images/orden_por_genero.png)\n\n")
+
+        f.write("## Análisis de correlación\n")
+        f.write("![Edad vs Total](images/edad_vs_total.png)\n\n")
+        f.write("![Heatmap](images/heatmap_correlaciones.png)\n\n")
+        
+        f.write("## Resumen de insights clave\n")
+        f.write(f"- {categoria_insight}\n")
+        f.write(f"- {region_insight}\n")
+        f.write(f"- {mes_insight}\n")
+        f.write(f"- {producto_insight}\n")
+        f.write(f"- {genero_comparacion}\n\n")
+
+        f.write("## Conclusiones y recomendaciones\n")
+        f.write("- [ ] (Por llenar)\n\n")
+
+        f.write("## 8. Preguntas\n")
+        f.write("- [ ] ¿Cómo podrían los insights obtenidos ayudar a diferenciarse de la competencia?\n")
+        f.write("- [ ] ¿Qué decisiones estratégicas podrían tomarse basándose en este análisis?\n")
+        f.write("- [ ] ¿Cómo podría este análisis de datos ayudar a la empresa a ahorrar costos o mejorar la eficiencia?\n")
+        f.write("- [ ] ¿Qué datos adicionales recomendarían recopilar para obtener insights aún más valiosos?\n")
+
+    print("Análisis completado. Resultados en Documentacion/")
+
+def limpiar_datos():
+    print(f"Eliminando tablas del esquema usando psycopg2...")
+
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+
+        cur.execute("SET search_path TO public;")
+        print("search_path establecido a 'public'")
+
+        drop_statements = [
+            "DROP TABLE IF EXISTS facts_ventas",
+            "DROP TABLE IF EXISTS dim_fecha",
+            "DROP TABLE IF EXISTS dim_cliente",
+            "DROP TABLE IF EXISTS dim_producto",
+            "DROP TABLE IF EXISTS dim_metodo_pago",
+            "DROP TABLE IF EXISTS dim_region_envio"
+        ]
+
+        for stmt in drop_statements:
+            print(f"Ejecutando: {stmt}")
+            try:
+                cur.execute(stmt)
+            except Exception as e:
+                print(f"Error eliminando tabla: {e}")
+
+        cur.close()
+        conn.close()
+        print("Esquema limpiado (tablas eliminadas).")
+
+    except Exception as e:
+        print(f"Error al conectar con la base de datos: {e}")
+
+if __name__ == '__main__':
     main()

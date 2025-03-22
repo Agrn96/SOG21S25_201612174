@@ -1,15 +1,6 @@
-USE VuelosDB;
-GO
-
-DROP TABLE IF EXISTS Flights_Fact;
-GO
-DROP TABLE IF EXISTS Passengers_Dim;
-GO
-DROP TABLE IF EXISTS Airports_Dim;
-GO
-DROP TABLE IF EXISTS Pilots_Dim;
-GO
-DROP TABLE IF EXISTS Dates_Dim;
-GO
-DROP TABLE IF EXISTS FlightStatus_Dim;
-GO
+DROP TABLE IF EXISTS public.facts_ventas;
+DROP TABLE IF EXISTS public.dim_fecha;
+DROP TABLE IF EXISTS public.dim_cliente;
+DROP TABLE IF EXISTS public.dim_producto;
+DROP TABLE IF EXISTS public.dim_metodo_pago;
+DROP TABLE IF EXISTS public.dim_region_envio;
