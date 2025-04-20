@@ -1,0 +1,9 @@
+mkdir odoo_project
+cd odoo_project
+nano docker-compose.yml
+
+sudo docker-compose up -d
+
+# Importar empleados_mega_city.csv
+# Importar productos_mega_city.csv
+

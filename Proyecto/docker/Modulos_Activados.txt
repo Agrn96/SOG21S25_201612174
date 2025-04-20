@@ -1,0 +1,7 @@
+- Sales
+- Invoicing
+- Purchases
+- Employees *
+- CRM
+- Website
+- Inventory

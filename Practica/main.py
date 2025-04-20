@@ -26,7 +26,7 @@ Seleccione una opción:
 2. Crear Esquema
 3. Cargar Datos
 4. Realizar Análisis
-5. Limpiar Datos (DROP Tables)
+5. Limpiar Datos
 6. Salir
         """)
         choice = input("Opción: ").strip()
